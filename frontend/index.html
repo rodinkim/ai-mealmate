@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 식단 플래너 — 목표에 맞는 맞춤 식단</title>
+  <meta name="description" content="다이어트·벌크업·당뇨관리·비건 목표에 맞는 AI 맞춤 식단을 생성하고, 재료를 쿠팡에서 바로 구매하세요.">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.min.css">
+  <script src="https://code.iconify.design/iconify-icon/2.3.0/iconify-icon.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Pretendard', 'system-ui', 'sans-serif'] },
+        },
+      },
+    }
+  </script>
+
+  <style>
+    /* ── BASE ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      background: #060d0a;
+      color: #ecfdf5;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* ── KOREAN TEXT ── */
+    .ko { word-break: keep-all; }
+
+    /* ── SPRING TRANSITION ── */
+    .sp { transition: all 0.5s cubic-bezier(0.16, 1, 0.3, 1); }
+
+    /* ── ANIMATIONS ── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(1.5rem); filter: blur(4px); }
+      to   { opacity: 1; transform: translateY(0);      filter: blur(0);   }
+    }
+    @keyframes float {
+      0%, 100% { transform: translateY(0px);   }
+      50%       { transform: translateY(-10px); }
+    }
+    @keyframes float2 {
+      0%, 100% { transform: translateY(0px);  }
+      50%       { transform: translateY(8px); }
+    }
+    @keyframes marquee {
+      from { transform: translateX(0);    }
+      to   { transform: translateX(-50%); }
+    }
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 0.6; transform: scale(1);   }
+      50%       { opacity: 1;   transform: scale(1.2); }
+    }
+
+    .reveal { opacity: 0; transform: translateY(1.25rem); filter: blur(3px);
+              transition: opacity 0.65s cubic-bezier(0.16,1,0.3,1),
+                          transform 0.65s cubic-bezier(0.16,1,0.3,1),
+                          filter 0.65s; }
+    .reveal.visible { opacity: 1; transform: translateY(0); filter: blur(0); }
+    .d1 { transition-delay: 80ms;  }
+    .d2 { transition-delay: 160ms; }
+    .d3 { transition-delay: 240ms; }
+    .d4 { transition-delay: 320ms; }
+
+    .float  { animation: float  7s ease-in-out infinite; }
+    .float2 { animation: float2 9s ease-in-out infinite; }
+    .marquee-anim { animation: marquee 30s linear infinite; }
+    .pulse-dot { animation: pulse-dot 2s ease-in-out infinite; }
+
+    /* ── GRAIN OVERLAY ── */
+    body::after {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+      opacity: 0.022;
+      pointer-events: none;
+      z-index: 60;
+    }
+
+    /* ── DOUBLE-BEZEL CARD ── */
+    .card {
+      padding: 1.5px;
+      border-radius: 1.375rem;
+      background: rgba(255,255,255,0.05);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.07);
+    }
+    .card-inner {
+      border-radius: calc(1.375rem - 1.5px);
+      background: rgba(5,18,10,0.92);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.07);
+    }
+    .card-selected {
+      background: rgba(74,222,128,0.18);
+      box-shadow: 0 0 0 1.5px rgba(74,222,128,0.45), 0 0 28px rgba(74,222,128,0.1);
+    }
+    .card-selected .card-inner {
+      background: rgba(4,25,12,0.96);
+    }
+
+    /* ── BUTTONS ── */
+    .btn-main {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+      padding: 1rem 1.75rem;
+      border-radius: 9999px;
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 800; font-size: 1rem;
+      color: #fff;
+      background: linear-gradient(135deg, #22c55e, #15803d);
+      box-shadow: 0 4px 20px rgba(34,197,94,0.3);
+      border: none; cursor: pointer; text-decoration: none;
+      transition: all 0.5s cubic-bezier(0.16,1,0.3,1);
+    }
+    .btn-main:hover  { transform: scale(1.02); box-shadow: 0 8px 32px rgba(34,197,94,0.4); }
+    .btn-main:active { transform: scale(0.98); }
+
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      border-radius: 9999px;
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 600; font-size: 0.875rem;
+      color: #94a3b8;
+      background: rgba(255,255,255,0.05);
+      box-shadow: 0 0 0 1px rgba(255,255,255,0.08);
+      border: none; cursor: pointer; text-decoration: none;
+      transition: all 0.4s cubic-bezier(0.16,1,0.3,1);
+    }
+    .btn-ghost:hover { background: rgba(255,255,255,0.09); color: #ecfdf5; }
+
+    /* ── INPUT ── */
+    .inp {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border-radius: 0.875rem;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.08);
+      color: #ecfdf5;
+      font-family: 'Pretendard', sans-serif;
+      font-size: 16px; /* iOS zoom prevention */
+      transition: border-color 0.3s, box-shadow 0.3s, background 0.3s;
+    }
+    .inp::placeholder { color: #334155; }
+    .inp:focus {
+      outline: none;
+      border-color: rgba(74,222,128,0.4);
+      box-shadow: 0 0 0 3px rgba(74,222,128,0.07);
+      background: rgba(255,255,255,0.06);
+    }
+
+    /* ── DAY BUTTON ── */
+    .day-btn {
+      flex: 1; height: 46px;
+      border-radius: 0.75rem;
+      font-family: 'Pretendard', sans-serif;
+      font-weight: 700; font-size: 0.875rem;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: rgba(255,255,255,0.04);
+      color: #475569;
+      cursor: pointer;
+      transition: all 0.35s cubic-bezier(0.16,1,0.3,1);
+    }
+    .day-btn:active { transform: scale(0.95); }
+    .day-btn.on {
+      background: linear-gradient(135deg, #22c55e, #15803d);
+      border-color: transparent;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(34,197,94,0.35);
+    }
+
+    /* ── MEAL ROW ── */
+    .meal-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.875rem 1rem;
+      min-height: 62px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      transition: background 0.2s;
+    }
+    .meal-row:last-of-type { border-bottom: none; }
+    .meal-row:hover  { background: rgba(255,255,255,0.025); }
+    .meal-row:active { background: rgba(255,255,255,0.045); }
+
+    .meal-detail { display: none; padding: 0 1rem 1rem; background: rgba(0,0,0,0.18); }
+    .meal-detail.open { display: block; animation: fadeInUp 0.35s cubic-bezier(0.16,1,0.3,1); }
+
+    /* ── EYEBROW TAG ── */
+    .eyebrow {
+      display: inline-flex; align-items: center;
+      padding: 0.3rem 0.875rem;
+      border-radius: 9999px;
+      background: rgba(74,222,128,0.08);
+      border: 1px solid rgba(74,222,128,0.14);
+      font-size: 0.65rem; font-weight: 700;
+      color: #4ade80;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+
+    /* ── AD SLOT ── */
+    .ad-slot {
+      width: 100%; min-height: 60px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 1rem;
+      background: rgba(255,255,255,0.015);
+      border: 1px dashed rgba(255,255,255,0.05);
+    }
+
+    /* ── SAFE AREA ── */
+    .pb-safe { padding-bottom: max(1.5rem, env(safe-area-inset-bottom)); }
+
+    /* ── SCROLLBAR ── */
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-thumb { background: rgba(74,222,128,0.18); border-radius: 2px; }
+
+    /* ── COUPANG TAG ── */
+    .coup-tag {
+      display: inline-flex; align-items: center; gap: 0.3rem;
+      padding: 0.22rem 0.6rem;
+      border-radius: 9999px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.07);
+      color: #94a3b8;
+      font-size: 0.75rem; text-decoration: none;
+      transition: all 0.3s;
+    }
+    .coup-tag:hover { border-color: rgba(255,88,0,0.35); color: #fb923c; }
+
+    /* ── HIDE/SHOW ── */
+    .d-none { display: none !important; }
+
+    @media (max-width: 767px) {
+      .desktop-only { display: none !important; }
+    }
+  </style>
+</head>
+
+<body>
+
+<!-- ══════════ BACKGROUND ORBS ══════════ -->
+<div style="position:fixed;inset:0;overflow:hidden;pointer-events:none;z-index:0;">
+  <div class="float"  style="position:absolute;top:-15%;left:-10%;width:min(480px,80vw);height:min(480px,80vw);border-radius:50%;background:radial-gradient(circle,rgba(34,197,94,0.065),transparent 70%);"></div>
+  <div class="float2" style="position:absolute;bottom:5%;right:-8%;width:min(380px,65vw);height:min(380px,65vw);border-radius:50%;background:radial-gradient(circle,rgba(20,184,166,0.05),transparent 70%);"></div>
+</div>
+
+<!-- ══════════ NAV ══════════ -->
+<nav style="position:sticky;top:0;z-index:50;padding:0.75rem 1rem;">
+  <div style="max-width:72rem;margin:0 auto;">
+    <div style="display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);background:rgba(6,13,10,0.82);border:1px solid rgba(255,255,255,0.07);border-radius:9999px;padding:0.625rem 1rem 0.625rem 0.875rem;">
+
+      <!-- Logo -->
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <div style="width:30px;height:30px;border-radius:0.5rem;background:linear-gradient(135deg,#22c55e,#15803d);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <iconify-icon icon="solar:leaf-bold" style="color:#fff;font-size:15px;"></iconify-icon>
+        </div>
+        <span class="ko" style="font-weight:800;font-size:0.875rem;color:#ecfdf5;">AI 식단 플래너</span>
+      </div>
+
+      <!-- Desktop links -->
+      <div class="desktop-only" style="display:flex;align-items:center;gap:1.75rem;">
+        <a href="#features" class="ko sp" style="font-size:0.85rem;color:#64748b;text-decoration:none;" onmouseover="this.style.color='#ecfdf5'" onmouseout="this.style.color='#64748b'">기능 소개</a>
+        <a href="#generator" class="ko sp" style="font-size:0.85rem;color:#64748b;text-decoration:none;" onmouseover="this.style.color='#ecfdf5'" onmouseout="this.style.color='#64748b'">식단 생성</a>
+        <a href="#reviews" class="ko sp" style="font-size:0.85rem;color:#64748b;text-decoration:none;" onmouseover="this.style.color='#ecfdf5'" onmouseout="this.style.color='#64748b'">후기</a>
+      </div>
+
+      <!-- CTA -->
+      <a href="#generator" class="btn-main ko" style="padding:0.5rem 1.1rem;font-size:0.8rem;font-weight:700;gap:0.375rem;">
+        식단 만들기
+        <div style="width:22px;height:22px;border-radius:50%;background:rgba(0,0,0,0.18);display:flex;align-items:center;justify-content:center;">
+          <iconify-icon icon="solar:arrow-right-bold" style="font-size:10px;"></iconify-icon>
+        </div>
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- ══════════ HERO ══════════ -->
+<section style="min-height:90dvh;display:flex;align-items:center;padding:2.5rem 0 2rem;position:relative;z-index:1;">
+  <div style="max-width:72rem;margin:0 auto;padding:0 1.25rem;width:100%;">
+    <div style="display:grid;grid-template-columns:1fr;gap:2.5rem;align-items:center;" class="lg-split">
+
+      <!-- Left -->
+      <div style="display:flex;flex-direction:column;gap:1.5rem;max-width:600px;">
+        <div class="reveal">
+          <span class="eyebrow">
+            <span class="pulse-dot" style="width:6px;height:6px;border-radius:50%;background:#4ade80;display:inline-block;margin-right:0.375rem;"></span>
+            Claude AI 기반
+          </span>
+        </div>
+
+        <h1 class="reveal d1 ko" style="font-size:clamp(2.4rem,7.5vw,3.75rem);font-weight:900;line-height:1.12;letter-spacing:-0.025em;color:#ecfdf5;">
+          목표에 맞는<br>
+          <span style="background:linear-gradient(135deg,#4ade80 0%,#2dd4bf 100%);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">맞춤 식단</span>을<br>
+          AI가 완성합니다
+        </h1>
+
+        <p class="reveal d2 ko" style="font-size:1.05rem;color:#94a3b8;line-height:1.75;max-width:44ch;">
+          다이어트, 벌크업, 당뇨관리, 비건 — 목표를 선택하면 AI가 아침·점심·저녁 식단을 자동 구성하고, 필요한 재료를 쿠팡에서 바로 구매할 수 있습니다.
+        </p>
+
+        <div class="reveal d3" style="display:flex;gap:0.75rem;flex-wrap:wrap;">
+          <a href="#generator" class="btn-main ko">
+            <iconify-icon icon="solar:magic-stick-bold" style="font-size:1.1rem;"></iconify-icon>
+            지금 식단 만들기
+          </a>
+          <a href="#features" class="btn-ghost ko">
+            서비스 소개
+            <iconify-icon icon="solar:alt-arrow-down-bold" style="font-size:0.875rem;"></iconify-icon>
+          </a>
+        </div>
+
+        <!-- Quick stats -->
+        <div class="reveal d4" style="display:flex;gap:2.25rem;padding-top:0.375rem;flex-wrap:wrap;">
+          <div>
+            <div style="font-size:1.6rem;font-weight:900;color:#4ade80;line-height:1;">12,847<span style="font-size:0.875rem;">+</span></div>
+            <div class="ko" style="font-size:0.72rem;color:#475569;margin-top:0.25rem;">식단 생성</div>
+          </div>
+          <div>
+            <div style="font-size:1.6rem;font-weight:900;color:#4ade80;line-height:1;">4.87<span style="font-size:0.875rem;">/5</span></div>
+            <div class="ko" style="font-size:0.72rem;color:#475569;margin-top:0.25rem;">사용자 만족도</div>
+          </div>
+          <div>
+            <div style="font-size:1.6rem;font-weight:900;color:#4ade80;line-height:1;">3<span style="font-size:0.875rem;">분</span></div>
+            <div class="ko" style="font-size:0.72rem;color:#475569;margin-top:0.25rem;">평균 생성 시간</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: preview card (desktop) -->
+      <div class="desktop-only float" style="display:flex;justify-content:center;align-items:center;">
+        <div class="card" style="width:100%;max-width:340px;">
+          <div class="card-inner" style="padding:1.25rem;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+              <div style="display:flex;align-items:center;gap:0.5rem;">
+                <div style="width:34px;height:34px;border-radius:0.625rem;background:rgba(74,222,128,0.1);display:flex;align-items:center;justify-content:center;">
+                  <iconify-icon icon="solar:chef-hat-minimalistic-bold" style="color:#4ade80;font-size:17px;"></iconify-icon>
+                </div>
+                <div>
+                  <div class="ko" style="font-size:0.8rem;font-weight:700;color:#ecfdf5;">다이어트 3일 식단</div>
+                  <div style="font-size:0.7rem;color:#475569;">AI 생성 완료</div>
+                </div>
+              </div>
+              <span style="font-size:0.68rem;font-weight:700;color:#4ade80;background:rgba(74,222,128,0.1);padding:0.25rem 0.6rem;border-radius:9999px;">Day 1</span>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.5rem;">
+              <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;border-radius:0.75rem;background:rgba(255,255,255,0.03);">
+                <iconify-icon icon="solar:cup-hot-bold" style="color:#fbbf24;font-size:20px;flex-shrink:0;"></iconify-icon>
+                <div><div class="ko" style="font-size:0.82rem;font-weight:600;color:#ecfdf5;">그릭요거트 과일볼</div><div style="font-size:0.7rem;color:#475569;">280 kcal</div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;border-radius:0.75rem;background:rgba(255,255,255,0.03);">
+                <iconify-icon icon="solar:sun-fog-bold" style="color:#f97316;font-size:20px;flex-shrink:0;"></iconify-icon>
+                <div><div class="ko" style="font-size:0.82rem;font-weight:600;color:#ecfdf5;">닭가슴살 채소 볶음</div><div style="font-size:0.7rem;color:#475569;">420 kcal</div></div>
+              </div>
+              <div style="display:flex;align-items:center;gap:0.75rem;padding:0.75rem;border-radius:0.75rem;background:rgba(255,255,255,0.03);">
+                <iconify-icon icon="solar:moon-stars-bold" style="color:#818cf8;font-size:20px;flex-shrink:0;"></iconify-icon>
+                <div><div class="ko" style="font-size:0.82rem;font-weight:600;color:#ecfdf5;">연어 채소 샐러드</div><div style="font-size:0.7rem;color:#475569;">380 kcal</div></div>
+              </div>
+            </div>
+            <div style="margin-top:0.875rem;padding-top:0.875rem;border-top:1px solid rgba(255,255,255,0.05);">
+              <button class="ko" style="width:100%;padding:0.625rem;border-radius:0.75rem;background:rgba(255,88,0,0.1);border:1px solid rgba(255,88,0,0.18);color:#fb923c;font-size:0.75rem;font-weight:700;display:flex;align-items:center;justify-content:center;gap:0.4rem;font-family:'Pretendard',sans-serif;cursor:pointer;">
+                <iconify-icon icon="solar:cart-large-4-bold" style="font-size:14px;"></iconify-icon>
+                재료 전체 쿠팡에서 구매하기
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ AD SLOT 1 — 쿠팡 파트너스 배너 ══════════ -->
+<div style="max-width:72rem;margin:0 auto;padding:0 1.25rem 2.5rem;position:relative;z-index:1;">
+  <div style="display:flex;justify-content:center;overflow:hidden;border-radius:0.75rem;">
+    <a href="https://link.coupang.com/a/eztjkC" target="_blank" referrerpolicy="unsafe-url">
+      <img src="https://ads-partners.coupang.com/banners/985236?subId=&traceId=V0-301-879dd1202e5c73b2-I985236&w=728&h=90" alt="쿠팡 파트너스" style="display:block;max-width:100%;height:auto;">
+    </a>
+  </div>
+</div>
+
+<!-- ══════════ FEATURES ══════════ -->
+<section id="features" style="padding:4.5rem 0;position:relative;z-index:1;">
+  <div style="max-width:72rem;margin:0 auto;padding:0 1.25rem;">
+
+    <div class="reveal" style="text-align:center;margin-bottom:2.75rem;">
+      <div style="margin-bottom:1rem;"><span class="eyebrow">4가지 목표</span></div>
+      <h2 class="ko" style="font-size:clamp(1.75rem,5vw,2.5rem);font-weight:900;line-height:1.2;letter-spacing:-0.025em;color:#ecfdf5;">내 목표에 딱 맞는<br>맞춤 식단 설계</h2>
+      <p class="ko" style="color:#64748b;margin-top:0.75rem;font-size:0.95rem;line-height:1.7;">각 목표별 최적화된 영양 기준과 식품 조합으로 식단을 자동 구성합니다</p>
+    </div>
+
+    <!-- Bento grid: 2×2 on mobile, asymmetric on desktop -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.875rem;">
+
+      <div class="card reveal">
+        <div class="card-inner" style="padding:1.5rem;min-height:190px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div>
+            <div style="width:46px;height:46px;border-radius:0.875rem;background:rgba(34,197,94,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
+              <iconify-icon icon="solar:scale-bold" style="color:#4ade80;font-size:23px;"></iconify-icon>
+            </div>
+            <h3 class="ko" style="font-size:1.05rem;font-weight:800;color:#ecfdf5;margin-bottom:0.375rem;">다이어트</h3>
+            <p class="ko" style="font-size:0.78rem;color:#64748b;line-height:1.6;">저칼로리 고단백 식단으로 포만감을 유지하며 건강하게 체중을 감량합니다</p>
+          </div>
+          <span style="display:inline-block;margin-top:0.875rem;font-size:0.68rem;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.07);padding:0.25rem 0.625rem;border-radius:9999px;">기본 1,500 kcal</span>
+        </div>
+      </div>
+
+      <div class="card reveal d1">
+        <div class="card-inner" style="padding:1.5rem;min-height:190px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div>
+            <div style="width:46px;height:46px;border-radius:0.875rem;background:rgba(251,146,60,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
+              <iconify-icon icon="solar:dumbbell-large-bold" style="color:#fb923c;font-size:23px;"></iconify-icon>
+            </div>
+            <h3 class="ko" style="font-size:1.05rem;font-weight:800;color:#ecfdf5;margin-bottom:0.375rem;">벌크업</h3>
+            <p class="ko" style="font-size:0.78rem;color:#64748b;line-height:1.6;">고칼로리 고단백 식단으로 근육 증가와 운동 회복력을 극대화합니다</p>
+          </div>
+          <span style="display:inline-block;margin-top:0.875rem;font-size:0.68rem;font-weight:700;color:#fb923c;background:rgba(251,146,60,0.07);padding:0.25rem 0.625rem;border-radius:9999px;">기본 3,000 kcal</span>
+        </div>
+      </div>
+
+      <div class="card reveal d2">
+        <div class="card-inner" style="padding:1.5rem;min-height:190px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div>
+            <div style="width:46px;height:46px;border-radius:0.875rem;background:rgba(129,140,248,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
+              <iconify-icon icon="solar:heart-pulse-bold" style="color:#818cf8;font-size:23px;"></iconify-icon>
+            </div>
+            <h3 class="ko" style="font-size:1.05rem;font-weight:800;color:#ecfdf5;margin-bottom:0.375rem;">당뇨관리</h3>
+            <p class="ko" style="font-size:0.78rem;color:#64748b;line-height:1.6;">저GI 식품 중심의 혈당 안정화 식단으로 건강한 일상을 유지합니다</p>
+          </div>
+          <span style="display:inline-block;margin-top:0.875rem;font-size:0.68rem;font-weight:700;color:#818cf8;background:rgba(129,140,248,0.07);padding:0.25rem 0.625rem;border-radius:9999px;">기본 1,800 kcal</span>
+        </div>
+      </div>
+
+      <div class="card reveal d3">
+        <div class="card-inner" style="padding:1.5rem;min-height:190px;display:flex;flex-direction:column;justify-content:space-between;">
+          <div>
+            <div style="width:46px;height:46px;border-radius:0.875rem;background:rgba(45,212,191,0.1);display:flex;align-items:center;justify-content:center;margin-bottom:1rem;">
+              <iconify-icon icon="solar:leaf-bold" style="color:#2dd4bf;font-size:23px;"></iconify-icon>
+            </div>
+            <h3 class="ko" style="font-size:1.05rem;font-weight:800;color:#ecfdf5;margin-bottom:0.375rem;">비건</h3>
+            <p class="ko" style="font-size:0.78rem;color:#64748b;line-height:1.6;">동물성 식품을 배제한 완전 식물성 식단으로 지구와 건강을 함께 챙깁니다</p>
+          </div>
+          <span style="display:inline-block;margin-top:0.875rem;font-size:0.68rem;font-weight:700;color:#2dd4bf;background:rgba(45,212,191,0.07);padding:0.25rem 0.625rem;border-radius:9999px;">기본 2,000 kcal</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ HOW IT WORKS ══════════ -->
+<section style="padding:4rem 0;position:relative;z-index:1;">
+  <div style="max-width:72rem;margin:0 auto;padding:0 1.25rem;">
+    <div class="reveal" style="text-align:center;margin-bottom:2.75rem;">
+      <div style="margin-bottom:1rem;"><span class="eyebrow">이용 방법</span></div>
+      <h2 class="ko" style="font-size:clamp(1.75rem,5vw,2.5rem);font-weight:900;line-height:1.2;letter-spacing:-0.025em;color:#ecfdf5;">3단계로 완성하는<br>나만의 식단</h2>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr;gap:0.875rem;">
+
+      <div class="card reveal">
+        <div class="card-inner" style="padding:1.5rem;display:flex;gap:1.125rem;align-items:flex-start;">
+          <div style="width:42px;height:42px;border-radius:50%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-size:0.8rem;font-weight:900;color:#4ade80;">01</span>
+          </div>
+          <div>
+            <h3 class="ko" style="font-size:1rem;font-weight:800;color:#ecfdf5;margin-bottom:0.375rem;">목표 선택</h3>
+            <p class="ko" style="font-size:0.83rem;color:#64748b;line-height:1.7;">다이어트·벌크업·당뇨관리·비건 중 목표를 선택하고 기간, 칼로리, 알레르기 등 세부 조건을 설정합니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card reveal d1">
+        <div class="card-inner" style="padding:1.5rem;display:flex;gap:1.125rem;align-items:flex-start;">
+          <div style="width:42px;height:42px;border-radius:50%;background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-size:0.8rem;font-weight:900;color:#4ade80;">02</span>
+          </div>
+          <div>
+            <h3 class="ko" style="font-size:1rem;font-weight:800;color:#ecfdf5;margin-bottom:0.375rem;">AI 식단 생성</h3>
+            <p class="ko" style="font-size:0.83rem;color:#64748b;line-height:1.7;">Claude AI가 영양 기준에 맞는 아침·점심·저녁 식단과 상세 재료 목록을 자동으로 구성합니다.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card reveal d2">
+        <div class="card-inner" style="padding:1.5rem;display:flex;gap:1.125rem;align-items:flex-start;">
+          <div style="width:42px;height:42px;border-radius:50%;background:rgba(255,88,0,0.08);border:1px solid rgba(255,88,0,0.18);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <span style="font-size:0.8rem;font-weight:900;color:#fb923c;">03</span>
+          </div>
+          <div>
+            <h3 class="ko" style="font-size:1rem;font-weight:800;color:#ecfdf5;margin-bottom:0.375rem;">쿠팡에서 바로 구매</h3>
+            <p class="ko" style="font-size:0.83rem;color:#64748b;line-height:1.7;">식단에 필요한 재료를 클릭 한 번으로 쿠팡에서 구매할 수 있습니다. 식재료 쇼핑도 더 스마트하게.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ AD SLOT 2 ══════════ -->
+<div style="max-width:72rem;margin:0 auto;padding:0 1.25rem 2rem;position:relative;z-index:1;">
+  <div class="ad-slot">
+    <span class="ko" style="font-size:0.68rem;color:#1e293b;">광고 영역</span>
+  </div>
+</div>
+
+<!-- ══════════ GENERATOR ══════════ -->
+<section id="generator" style="padding:4.5rem 0;position:relative;z-index:1;">
+  <div style="max-width:44rem;margin:0 auto;padding:0 1.25rem;">
+
+    <div class="reveal" style="text-align:center;margin-bottom:2.5rem;">
+      <div style="margin-bottom:1rem;"><span class="eyebrow">AI Generator</span></div>
+      <h2 class="ko" style="font-size:clamp(1.75rem,5vw,2.25rem);font-weight:900;line-height:1.2;letter-spacing:-0.025em;color:#ecfdf5;">지금 바로 식단을<br>생성해보세요</h2>
+      <p class="ko" style="color:#64748b;margin-top:0.625rem;font-size:0.9rem;line-height:1.7;">목표만 선택하면 AI가 맞춤 식단을 즉시 완성합니다</p>
+    </div>
+
+    <!-- STEP 01: Goal -->
+    <div class="reveal" style="margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:1rem;">
+        <span style="font-size:0.68rem;font-weight:800;color:#4ade80;letter-spacing:0.12em;">01</span>
+        <span class="ko" style="font-size:0.95rem;font-weight:800;color:#ecfdf5;">목표 선택</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.75rem;">
+
+        <button class="card sp" id="gc-diet" onclick="selectGoal('diet')" style="text-align:left;background:none;border:none;cursor:pointer;padding:0;">
+          <div class="card-inner" style="padding:1.25rem 1rem;min-height:128px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <iconify-icon icon="solar:scale-bold" style="color:#4ade80;font-size:26px;display:block;margin-bottom:0.625rem;"></iconify-icon>
+              <div class="ko" style="font-size:0.95rem;font-weight:800;color:#ecfdf5;margin-bottom:0.25rem;">다이어트</div>
+              <div class="ko" style="font-size:0.75rem;color:#64748b;line-height:1.5;">저칼로리 고단백 식단</div>
+            </div>
+            <div style="font-size:0.68rem;color:#334155;margin-top:0.5rem;font-weight:700;">1,500 kcal 기본</div>
+          </div>
+        </button>
+
+        <button class="card sp" id="gc-bulk" onclick="selectGoal('bulk')" style="text-align:left;background:none;border:none;cursor:pointer;padding:0;">
+          <div class="card-inner" style="padding:1.25rem 1rem;min-height:128px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <iconify-icon icon="solar:dumbbell-large-bold" style="color:#fb923c;font-size:26px;display:block;margin-bottom:0.625rem;"></iconify-icon>
+              <div class="ko" style="font-size:0.95rem;font-weight:800;color:#ecfdf5;margin-bottom:0.25rem;">벌크업</div>
+              <div class="ko" style="font-size:0.75rem;color:#64748b;line-height:1.5;">고칼로리 고단백 식단</div>
+            </div>
+            <div style="font-size:0.68rem;color:#334155;margin-top:0.5rem;font-weight:700;">3,000 kcal 기본</div>
+          </div>
+        </button>
+
+        <button class="card sp" id="gc-diabetes" onclick="selectGoal('diabetes')" style="text-align:left;background:none;border:none;cursor:pointer;padding:0;">
+          <div class="card-inner" style="padding:1.25rem 1rem;min-height:128px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <iconify-icon icon="solar:heart-pulse-bold" style="color:#818cf8;font-size:26px;display:block;margin-bottom:0.625rem;"></iconify-icon>
+              <div class="ko" style="font-size:0.95rem;font-weight:800;color:#ecfdf5;margin-bottom:0.25rem;">당뇨관리</div>
+              <div class="ko" style="font-size:0.75rem;color:#64748b;line-height:1.5;">저GI 혈당 안정화 식단</div>
+            </div>
+            <div style="font-size:0.68rem;color:#334155;margin-top:0.5rem;font-weight:700;">1,800 kcal 기본</div>
+          </div>
+        </button>
+
+        <button class="card sp" id="gc-vegan" onclick="selectGoal('vegan')" style="text-align:left;background:none;border:none;cursor:pointer;padding:0;">
+          <div class="card-inner" style="padding:1.25rem 1rem;min-height:128px;display:flex;flex-direction:column;justify-content:space-between;">
+            <div>
+              <iconify-icon icon="solar:leaf-bold" style="color:#2dd4bf;font-size:26px;display:block;margin-bottom:0.625rem;"></iconify-icon>
+              <div class="ko" style="font-size:0.95rem;font-weight:800;color:#ecfdf5;margin-bottom:0.25rem;">비건</div>
+              <div class="ko" style="font-size:0.75rem;color:#64748b;line-height:1.5;">완전 식물성 식단</div>
+            </div>
+            <div style="font-size:0.68rem;color:#334155;margin-top:0.5rem;font-weight:700;">2,000 kcal 기본</div>
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- STEP 02: Options -->
+    <div id="opts" class="d-none reveal" style="margin-bottom:1.5rem;">
+      <div style="display:flex;align-items:center;gap:0.625rem;margin-bottom:1rem;">
+        <span style="font-size:0.68rem;font-weight:800;color:#4ade80;letter-spacing:0.12em;">02</span>
+        <span class="ko" style="font-size:0.95rem;font-weight:800;color:#ecfdf5;">조건 설정</span>
+      </div>
+
+      <!-- Days -->
+      <div class="card" style="margin-bottom:0.875rem;">
+        <div class="card-inner" style="padding:1.25rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.875rem;">
+            <div style="display:flex;align-items:center;gap:0.5rem;">
+              <iconify-icon icon="solar:calendar-mark-bold" style="color:#4ade80;font-size:16px;"></iconify-icon>
+              <span class="ko" style="font-size:0.875rem;font-weight:700;color:#ecfdf5;">식단 기간</span>
+            </div>
+            <span id="days-label" style="font-size:1rem;font-weight:900;background:linear-gradient(135deg,#4ade80,#2dd4bf);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;">3일</span>
+          </div>
+          <div style="display:flex;gap:0.375rem;">
+            <button class="day-btn" onclick="setDays(1)" id="db1">1</button>
+            <button class="day-btn" onclick="setDays(2)" id="db2">2</button>
+            <button class="day-btn on" onclick="setDays(3)" id="db3">3</button>
+            <button class="day-btn" onclick="setDays(4)" id="db4">4</button>
+            <button class="day-btn" onclick="setDays(5)" id="db5">5</button>
+            <button class="day-btn" onclick="setDays(6)" id="db6">6</button>
+            <button class="day-btn" onclick="setDays(7)" id="db7">7</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Calories & Allergies -->
+      <div class="card">
+        <div class="card-inner" style="padding:1.25rem;display:flex;flex-direction:column;gap:1.125rem;">
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <iconify-icon icon="solar:fire-bold" style="color:#4ade80;font-size:15px;"></iconify-icon>
+                <span class="ko" style="font-size:0.875rem;font-weight:700;color:#ecfdf5;">목표 칼로리</span>
+              </div>
+              <span class="ko" style="font-size:0.68rem;color:#334155;">선택사항</span>
+            </div>
+            <div style="position:relative;">
+              <input type="number" id="cal-inp" inputmode="numeric" class="inp ko" placeholder="" style="padding-right:3rem;">
+              <span style="position:absolute;right:0.875rem;top:50%;transform:translateY(-50%);font-size:0.8rem;color:#334155;">kcal</span>
+            </div>
+            <p id="cal-hint" class="ko" style="font-size:0.7rem;color:#334155;margin-top:0.375rem;"></p>
+          </div>
+
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.5rem;">
+              <div style="display:flex;align-items:center;gap:0.4rem;">
+                <iconify-icon icon="solar:shield-check-bold" style="color:#4ade80;font-size:15px;"></iconify-icon>
+                <span class="ko" style="font-size:0.875rem;font-weight:700;color:#ecfdf5;">알레르기 / 제외 식품</span>
+              </div>
+              <span class="ko" style="font-size:0.68rem;color:#334155;">선택사항</span>
+            </div>
+            <div style="display:flex;gap:0.5rem;">
+              <input type="text" id="allg-inp" class="inp ko" placeholder="예: 땅콩, 우유, 밀" style="flex:1;" onkeydown="if(event.key==='Enter')addTag()">
+              <button onclick="addTag()" class="ko sp" style="padding:0 1rem;border-radius:0.875rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:#64748b;font-size:0.875rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:'Pretendard',sans-serif;" onmouseover="this.style.background='rgba(255,255,255,0.08)';this.style.color='#ecfdf5'" onmouseout="this.style.background='rgba(255,255,255,0.04)';this.style.color='#64748b'">추가</button>
+            </div>
+            <div id="allg-tags" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-top:0.5rem;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Generate button -->
+    <div id="gen-btn-wrap" class="d-none reveal">
+      <button id="gen-btn" onclick="generate()" class="btn-main ko" style="width:100%;border-radius:1rem;padding:1.125rem 2rem;font-size:1rem;gap:0.625rem;">
+        <iconify-icon icon="solar:magic-stick-bold" style="font-size:1.125rem;"></iconify-icon>
+        <span id="btn-txt">AI 식단 생성하기</span>
+        <div style="width:30px;height:30px;border-radius:50%;background:rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;margin-left:auto;">
+          <iconify-icon icon="solar:arrow-right-bold" style="font-size:12px;"></iconify-icon>
+        </div>
+      </button>
+    </div>
+
+    <!-- Error -->
+    <div id="err-box" class="d-none" style="margin-top:1rem;padding:1rem 1.25rem;border-radius:1rem;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.14);">
+      <p id="err-txt" class="ko" style="font-size:0.875rem;color:#f87171;"></p>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="d-none" style="margin-top:2rem;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.25rem;">
+        <div>
+          <p style="font-size:0.68rem;font-weight:800;color:#4ade80;letter-spacing:0.1em;text-transform:uppercase;margin-bottom:0.25rem;">생성 완료</p>
+          <h3 id="res-title" class="ko" style="font-size:1.1rem;font-weight:800;color:#ecfdf5;"></h3>
+        </div>
+        <div style="text-align:right;">
+          <p class="ko" style="font-size:0.68rem;color:#475569;margin-bottom:0.125rem;">일 평균</p>
+          <p id="res-avg" style="font-size:1.05rem;font-weight:800;color:#4ade80;"></p>
+        </div>
+      </div>
+      <div id="day-list" style="display:flex;flex-direction:column;gap:0.875rem;"></div>
+
+      <!-- Ad in results -->
+      <div style="margin-top:1.5rem;" class="ad-slot">
+        <span class="ko" style="font-size:0.68rem;color:#1e293b;">광고 영역</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ REVIEWS ══════════ -->
+<section id="reviews" style="padding:4rem 0;position:relative;z-index:1;">
+  <div style="max-width:72rem;margin:0 auto;padding:0 1.25rem;">
+    <div class="reveal" style="text-align:center;margin-bottom:2.75rem;">
+      <div style="margin-bottom:1rem;"><span class="eyebrow">사용자 후기</span></div>
+      <h2 class="ko" style="font-size:clamp(1.75rem,5vw,2.5rem);font-weight:900;line-height:1.2;letter-spacing:-0.025em;color:#ecfdf5;">실제 사용자들의<br>식단 성공 스토리</h2>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr;gap:0.875rem;">
+
+      <div class="card reveal">
+        <div class="card-inner" style="padding:1.5rem;">
+          <div style="display:flex;gap:0.2rem;margin-bottom:0.875rem;">
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+          </div>
+          <p class="ko" style="font-size:0.9rem;color:#94a3b8;line-height:1.75;margin-bottom:1rem;">"다이어트 식단을 직접 짜는 게 너무 힘들었는데, AI가 영양 균형까지 맞춰서 만들어주니 정말 편해요. 쿠팡 링크까지 연결돼서 장보기도 훨씬 수월해졌습니다."</p>
+          <div style="display:flex;align-items:center;gap:0.75rem;">
+            <img src="https://i.pravatar.cc/40?u=hayunseo1" alt="하윤서" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" loading="lazy" decoding="async">
+            <div>
+              <div style="font-size:0.82rem;font-weight:700;color:#ecfdf5;">하윤서</div>
+              <div style="font-size:0.7rem;color:#475569;">다이어트 · 3개월째 이용 중</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card reveal d1">
+        <div class="card-inner" style="padding:1.5rem;">
+          <div style="display:flex;gap:0.2rem;margin-bottom:0.875rem;">
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+          </div>
+          <p class="ko" style="font-size:0.9rem;color:#94a3b8;line-height:1.75;margin-bottom:1rem;">"헬스 시작하고 뭘 먹어야 할지 몰랐는데 벌크업 식단이 정말 구체적으로 나와요. 단백질 섭취량도 딱 맞고, 매주 새로운 식단 받아서 질리지 않아요."</p>
+          <div style="display:flex;align-items:center;gap:0.75rem;">
+            <img src="https://i.pravatar.cc/40?u=parkdohyun2" alt="박도현" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" loading="lazy" decoding="async">
+            <div>
+              <div style="font-size:0.82rem;font-weight:700;color:#ecfdf5;">박도현</div>
+              <div style="font-size:0.7rem;color:#475569;">벌크업 · 헬스 6개월차</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card reveal d2">
+        <div class="card-inner" style="padding:1.5rem;">
+          <div style="display:flex;gap:0.2rem;margin-bottom:0.875rem;">
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+            <iconify-icon icon="solar:star-bold" style="color:#fbbf24;font-size:13px;"></iconify-icon>
+          </div>
+          <p class="ko" style="font-size:0.9rem;color:#94a3b8;line-height:1.75;margin-bottom:1rem;">"당뇨 진단받고 식단 관리가 막막했어요. AI가 혈당에 좋은 식품으로만 구성해줘서 안심하고 먹을 수 있어요. 의사 선생님도 식단 구성이 좋다고 하셨어요."</p>
+          <div style="display:flex;align-items:center;gap:0.75rem;">
+            <img src="https://i.pravatar.cc/40?u=leesejin3" alt="이서진" style="width:38px;height:38px;border-radius:50%;object-fit:cover;" loading="lazy" decoding="async">
+            <div>
+              <div style="font-size:0.82rem;font-weight:700;color:#ecfdf5;">이서진</div>
+              <div style="font-size:0.7rem;color:#475569;">당뇨관리 · 영양 관리 중</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ CTA ══════════ -->
+<section style="padding:3.5rem 0;position:relative;z-index:1;">
+  <div style="max-width:72rem;margin:0 auto;padding:0 1.25rem;">
+    <div class="card reveal">
+      <div class="card-inner" style="padding:3rem 1.5rem;text-align:center;background:linear-gradient(135deg,rgba(34,197,94,0.05) 0%,rgba(20,184,166,0.03) 100%);">
+        <h2 class="ko" style="font-size:clamp(1.5rem,4.5vw,2rem);font-weight:900;line-height:1.2;letter-spacing:-0.02em;color:#ecfdf5;margin-bottom:0.75rem;">오늘부터 건강한 식단을<br>시작해보세요</h2>
+        <p class="ko" style="color:#64748b;font-size:0.9rem;line-height:1.75;margin-bottom:2rem;max-width:38ch;margin-left:auto;margin-right:auto;">AI가 당신의 목표에 맞는 완벽한 식단을 만들어드립니다.<br>지금 바로 무료로 시작하세요.</p>
+        <a href="#generator" class="btn-main ko" style="display:inline-flex;">
+          <iconify-icon icon="solar:magic-stick-bold" style="font-size:1rem;"></iconify-icon>
+          무료로 식단 만들기
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FOOTER ══════════ -->
+<footer class="pb-safe" style="border-top:1px solid rgba(255,255,255,0.05);padding:2rem 0;position:relative;z-index:1;">
+  <div style="max-width:72rem;margin:0 auto;padding:0 1.25rem;display:flex;flex-direction:column;align-items:center;gap:1rem;text-align:center;">
+    <div style="display:flex;align-items:center;gap:0.5rem;">
+      <div style="width:26px;height:26px;border-radius:0.4rem;background:linear-gradient(135deg,#22c55e,#15803d);display:flex;align-items:center;justify-content:center;">
+        <iconify-icon icon="solar:leaf-bold" style="color:#fff;font-size:13px;"></iconify-icon>
+      </div>
+      <span style="font-weight:800;font-size:0.85rem;color:#475569;">AI 식단 플래너</span>
+    </div>
+    <p class="ko" style="font-size:0.72rem;color:#1e293b;line-height:1.7;max-width:42ch;">
+      본 서비스는 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.<br>제공되는 식단은 참고용이며 의학적 조언을 대체하지 않습니다.
+    </p>
+    <p style="font-size:0.68rem;color:#0f172a;">© 2025 AI 식단 플래너. All rights reserved.</p>
+  </div>
+</footer>
+
+<!-- ══════════ JAVASCRIPT ══════════ -->
+<script>
+  const API = 'https://mealsmates-api-501737939599.asia-northeast3.run.app';
+
+  const GOAL_KO  = { diet:'다이어트', bulk:'벌크업', diabetes:'당뇨관리', vegan:'비건' };
+  const GOAL_CAL = { diet:1500, bulk:3000, diabetes:1800, vegan:2000 };
+  const GOAL_CLR = { diet:'#4ade80', bulk:'#fb923c', diabetes:'#818cf8', vegan:'#2dd4bf' };
+
+  let goal=null, days=3, allergies=[];
+
+  // ── GOAL ──
+  function selectGoal(g) {
+    goal = g;
+    ['diet','bulk','diabetes','vegan'].forEach(k => {
+      const el = document.getElementById(`gc-${k}`);
+      el.querySelector('.card').className = k===g ? 'card card-selected sp' : 'card sp';
+    });
+    document.getElementById('cal-hint').textContent = `미입력 시 기본 ${GOAL_CAL[g].toLocaleString()} kcal 적용`;
+
+    show('opts'); show('gen-btn-wrap');
+    setDays(3);
+  }
+
+  // ── DAYS ──
+  function setDays(d) {
+    days = d;
+    document.getElementById('days-label').textContent = `${d}일`;
+    for(let i=1;i<=7;i++) document.getElementById(`db${i}`).className = i===d ? 'day-btn on' : 'day-btn';
+  }
+
+  // ── ALLERGIES ──
+  function addTag() {
+    const inp = document.getElementById('allg-inp');
+    const v = inp.value.trim();
+    if(!v || allergies.includes(v)) { inp.value=''; return; }
+    allergies.push(v); inp.value='';
+    renderTags();
+  }
+  function removeTag(t) { allergies=allergies.filter(a=>a!==t); renderTags(); }
+  function renderTags() {
+    document.getElementById('allg-tags').innerHTML = allergies.map(t=>`
+      <span style="display:inline-flex;align-items:center;gap:0.3rem;padding:0.22rem 0.625rem;border-radius:9999px;background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.14);color:#f87171;font-size:0.78rem;font-weight:600;">
+        ${t}
+        <button onclick="removeTag('${t}')" style="background:none;border:none;color:#f87171;cursor:pointer;font-size:1rem;line-height:1;padding:0;font-family:'Pretendard',sans-serif;">×</button>
+      </span>`).join('');
+  }
+
+  // ── GENERATE ──
+  async function generate() {
+    if(!goal) return;
+    const btn=document.getElementById('gen-btn');
+    const txt=document.getElementById('btn-txt');
+    const calVal=document.getElementById('cal-inp').value;
+
+    btn.disabled=true;
+    txt.textContent='AI가 식단을 생성하는 중...';
+    btn.style.background='rgba(34,197,94,0.35)';
+    btn.style.boxShadow='none';
+    hide('err-box'); hide('results');
+
+    try {
+      const res = await fetch(`${API}/api/meal-plan/generate`,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          goal: GOAL_KO[goal],
+          days,
+          calories_per_day: calVal ? Number(calVal) : null,
+          allergies,
+        }),
+      });
+      if(!res.ok) throw new Error('식단 생성에 실패했습니다. 다시 시도해주세요.');
+      renderResults(await res.json());
+    } catch(e) {
+      document.getElementById('err-txt').textContent = e.message||'오류가 발생했습니다.';
+      show('err-box');
+    } finally {
+      btn.disabled=false;
+      txt.textContent='AI 식단 생성하기';
+      btn.style.background='linear-gradient(135deg,#22c55e,#15803d)';
+      btn.style.boxShadow='0 4px 20px rgba(34,197,94,0.3)';
+    }
+  }
+
+  // ── RENDER RESULTS ──
+  function renderResults(data) {
+    const avg = Math.round(data.plan.reduce((s,d)=>s+d.total_calories,0)/data.plan.length);
+    document.getElementById('res-title').textContent = `${data.goal} ${data.days}일 식단`;
+    document.getElementById('res-avg').textContent = `${avg.toLocaleString()} kcal`;
+
+    document.getElementById('day-list').innerHTML = data.plan.map(d=>renderDay(d)).join('');
+    show('results');
+    setTimeout(()=> document.getElementById('results').scrollIntoView({behavior:'smooth',block:'start'}), 120);
+  }
+
+  function renderDay(d) {
+    const meals=[
+      {k:'breakfast',label:'아침',icon:'solar:cup-hot-bold',clr:'#fbbf24',m:d.breakfast},
+      {k:'lunch',    label:'점심',icon:'solar:sun-fog-bold',clr:'#f97316',m:d.lunch},
+      {k:'dinner',   label:'저녁',icon:'solar:moon-stars-bold',clr:'#818cf8',m:d.dinner},
+    ];
+    return `
+    <div class="card" style="overflow:hidden;">
+      <div class="card-inner" style="overflow:hidden;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:0.875rem 1rem;background:rgba(74,222,128,0.055);border-bottom:1px solid rgba(255,255,255,0.04);">
+          <span style="font-size:0.875rem;font-weight:900;color:#4ade80;">Day ${d.day}</span>
+          <span style="font-size:0.8rem;color:#475569;">총 <span style="color:#4ade80;font-weight:800;">${d.total_calories.toLocaleString()}</span> kcal</span>
+        </div>
+        ${meals.map(m=>renderMealRow(m,d.day)).join('')}
+        <div style="padding:0.75rem 1rem;border-top:1px solid rgba(255,255,255,0.04);">
+          <a href="${coupangSearch('건강식 식단 재료')}" target="_blank" rel="noopener sponsored" class="ko" style="display:flex;align-items:center;justify-content:center;gap:0.5rem;width:100%;padding:0.75rem;border-radius:0.875rem;background:rgba(255,88,0,0.08);border:1px solid rgba(255,88,0,0.15);color:#fb923c;font-size:0.8rem;font-weight:700;text-decoration:none;transition:all 0.3s;" onmouseover="this.style.background='rgba(255,88,0,0.13)'" onmouseout="this.style.background='rgba(255,88,0,0.08)'">
+            <iconify-icon icon="solar:cart-large-4-bold" style="font-size:15px;"></iconify-icon>
+            Day ${d.day} 재료 전체 쿠팡에서 구매하기
+          </a>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderMealRow(mData,dayNum) {
+    const id=`mr-${dayNum}-${mData.k}`;
+    const ingTags = mData.m.ingredients.map(ing=>`
+      <a href="${coupangSearch(ing.name)}" target="_blank" rel="noopener sponsored" class="coup-tag ko">
+        <iconify-icon icon="solar:cart-4-bold" style="font-size:10px;color:#fb923c;"></iconify-icon>
+        ${ing.name} <span style="color:#334155;">${ing.amount}</span>
+      </a>`).join('');
+    return `
+    <div>
+      <div class="meal-row" onclick="toggleRow('${id}')">
+        <div style="display:flex;align-items:center;gap:0.75rem;min-width:0;">
+          <iconify-icon icon="${mData.icon}" style="color:${mData.clr};font-size:22px;flex-shrink:0;"></iconify-icon>
+          <div style="min-width:0;">
+            <div class="ko" style="font-size:0.68rem;color:#334155;margin-bottom:0.1rem;">${mData.label}</div>
+            <div class="ko" style="font-size:0.875rem;font-weight:700;color:#ecfdf5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${mData.m.name}</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:0.625rem;flex-shrink:0;margin-left:0.5rem;">
+          <span style="font-size:0.75rem;color:#475569;white-space:nowrap;">${mData.m.calories} kcal</span>
+          <iconify-icon icon="solar:alt-arrow-down-bold" id="${id}-chev" style="color:#334155;font-size:11px;transition:transform 0.35s cubic-bezier(0.16,1,0.3,1);"></iconify-icon>
+        </div>
+      </div>
+      <div id="${id}" class="meal-detail">
+        <p class="ko" style="font-size:0.8rem;color:#64748b;line-height:1.75;margin-bottom:0.75rem;padding-top:0.5rem;">${mData.m.description}</p>
+        <div style="display:flex;flex-wrap:wrap;gap:0.375rem;">${ingTags}</div>
+      </div>
+    </div>`;
+  }
+
+  function toggleRow(id) {
+    const el=document.getElementById(id);
+    const ch=document.getElementById(`${id}-chev`);
+    const open=el.classList.toggle('open');
+    ch.style.transform=open?'rotate(180deg)':'rotate(0deg)';
+  }
+
+  // ── COUPANG ──
+  function coupangSearch(q) {
+    // TODO: 쿠팡 파트너스 가입 후 실제 affiliate URL로 교체하세요
+    // https://partners.coupang.com 에서 링크 생성
+    return `https://www.coupang.com/np/search?q=${encodeURIComponent(q)}&ref=ai-diet-planner`;
+  }
+
+  // ── UTILS ──
+  function show(id) {
+    const el=document.getElementById(id);
+    el.classList.remove('d-none');
+    setTimeout(()=>el.classList.add('visible'),30);
+  }
+  function hide(id) { document.getElementById(id).classList.add('d-none'); }
+
+  // ── INTERSECTION OBSERVER ──
+  const io = new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); }
+    });
+  },{ threshold:0.08, rootMargin:'0px 0px -32px 0px' });
+
+  document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+</script>
+
+</body>
+</html>
