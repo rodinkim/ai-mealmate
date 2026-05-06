@@ -1,11 +1,29 @@
 import { useState } from 'react'
 import type { DailyMeal, MealItem } from '../types'
+import { coupangSearchUrl } from '../lib/coupang'
 
 const MEAL_META = {
   breakfast: { label: '아침', icon: '🌅' },
   lunch:     { label: '점심', icon: '☀️' },
   dinner:    { label: '저녁', icon: '🌙' },
 } as const
+
+function normalizeMealItem(raw: Partial<MealItem> | undefined | null): MealItem {
+  const ingredients = Array.isArray(raw?.ingredients)
+    ? raw.ingredients.map((ing) => ({
+        name: ing?.name != null ? String(ing.name) : '',
+        amount: ing?.amount != null ? String(ing.amount) : '',
+      }))
+    : []
+  const cal = raw?.calories
+  const calories = typeof cal === 'number' ? cal : Number(cal) || 0
+  return {
+    name: raw?.name != null ? String(raw.name) : '-',
+    ingredients,
+    calories,
+    description: raw?.description != null ? String(raw.description) : '',
+  }
+}
 
 function MealRow({ type, meal }: { type: keyof typeof MEAL_META; meal: MealItem }) {
   const [open, setOpen] = useState(false)
@@ -39,19 +57,31 @@ function MealRow({ type, meal }: { type: keyof typeof MEAL_META; meal: MealItem 
           <p className="text-sm text-slate-500 mb-3 leading-relaxed pt-2">{meal.description}</p>
           <div className="flex flex-wrap gap-2">
             {meal.ingredients.map((ing, i) => (
-              <span
+              <a
                 key={i}
-                className="text-sm px-3 py-1.5 rounded-full text-slate-400"
-                style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.08)' }}
+                href={coupangSearchUrl(ing.name)}
+                target="_blank"
+                rel="noopener noreferrer sponsored"
+                className="text-sm px-3 py-1.5 rounded-full text-orange-300/90 no-underline inline-flex items-center gap-1"
+                style={{ background: 'rgba(249,115,22,0.12)', border: '1px solid rgba(249,115,22,0.25)' }}
               >
                 {ing.name}
-                <span className="text-slate-600 ml-1">{ing.amount}</span>
-              </span>
+                <span className="text-slate-500">{ing.amount}</span>
+              </a>
             ))}
           </div>
         </div>
       )}
     </div>
+  )
+}
+
+function dailyTotalKcal(meal: DailyMeal): number {
+  if (typeof meal.total_calories === 'number') return meal.total_calories
+  return (
+    (meal.breakfast?.calories ?? 0) +
+    (meal.lunch?.calories ?? 0) +
+    (meal.dinner?.calories ?? 0)
   )
 }
 
@@ -67,12 +97,23 @@ export default function DayCard({ meal }: { meal: DailyMeal }) {
       >
         <span className="font-bold text-green-400">Day {meal.day}</span>
         <span className="text-sm text-slate-500">
-          총 <span className="text-green-400 font-bold">{meal.total_calories.toLocaleString()}</span> kcal
+          총 <span className="text-green-400 font-bold">{dailyTotalKcal(meal).toLocaleString()}</span> kcal
         </span>
       </div>
-      <MealRow type="breakfast" meal={meal.breakfast} />
-      <MealRow type="lunch"     meal={meal.lunch} />
-      <MealRow type="dinner"    meal={meal.dinner} />
+      <MealRow type="breakfast" meal={normalizeMealItem(meal.breakfast)} />
+      <MealRow type="lunch"     meal={normalizeMealItem(meal.lunch)} />
+      <MealRow type="dinner"    meal={normalizeMealItem(meal.dinner)} />
+      <div className="px-4 py-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+        <a
+          href={coupangSearchUrl('건강식 식단 재료')}
+          target="_blank"
+          rel="noopener noreferrer sponsored"
+          className="flex items-center justify-center gap-2 w-full py-3 rounded-xl text-sm font-semibold no-underline text-orange-300"
+          style={{ background: 'rgba(249,115,22,0.1)', border: '1px solid rgba(249,115,22,0.25)' }}
+        >
+          Day {meal.day} 재료 쿠팡에서 보기
+        </a>
+      </div>
     </div>
   )
 }

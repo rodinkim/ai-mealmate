@@ -39,7 +39,15 @@ HUMAN_TEMPLATE = """목표: {goal}
 
 
 def make_prompt(system_instruction: str) -> ChatPromptTemplate:
-    system = f"{system_instruction}\n\n다른 설명 없이 JSON만 출력하세요.\n{JSON_SCHEMA}"
+    system = (
+        f"{system_instruction}\n\n"
+        "## 출력 규칙 (반드시 준수)\n"
+        "- JSON 외에 어떤 텍스트도 출력하지 마세요\n"
+        "- 마크다운 코드 블록(```json) 사용 금지\n"
+        "- 추가 설명, 제안사항, 주석 출력 금지\n"
+        "- 응답의 첫 글자는 반드시 {{ 이어야 합니다\n\n"
+        f"출력 형식:\n{JSON_SCHEMA}"
+    )
     return ChatPromptTemplate.from_messages([
         ("system", system),
         ("human", HUMAN_TEMPLATE),

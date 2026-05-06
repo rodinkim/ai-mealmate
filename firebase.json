@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "target": "mealsmates",
     "public": "frontend",
     "ignore": [
       "firebase.json",

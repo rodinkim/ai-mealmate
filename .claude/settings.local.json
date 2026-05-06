@@ -44,7 +44,13 @@
       "Bash(gcloud run *)",
       "Bash(firebase deploy *)",
       "Bash(firebase hosting:sites:list --project saju-494604)",
-      "Bash(nslookup *)"
+      "Bash(nslookup *)",
+      "Bash(venv/Scripts/python -c \"from app.prompts import DIET_PROMPT, BULK_PROMPT, DIABETES_PROMPT, VEGAN_PROMPT; print\\('OK'\\)\")",
+      "Bash(netstat -ano)",
+      "Bash(taskkill /PID 27212 /F)",
+      "Bash(cmd.exe /c \"taskkill /PID 27212 /F\")",
+      "Bash(cmd.exe *)",
+      "PowerShell(Get-Process *)"
     ]
   }
 }

@@ -4,6 +4,7 @@ import { GOALS } from './constants/goals'
 import { generateMealPlan } from './api/mealPlan'
 import GoalCard from './components/GoalCard'
 import MealForm from './components/MealForm'
+import CoupangDynamicBannerPreview from './components/CoupangDynamicBannerPreview'
 import MealPlanResult from './components/MealPlanResult'
 
 export default function App() {
@@ -84,6 +85,8 @@ export default function App() {
             목표를 선택하면 AI가 최적의 식단을 생성합니다
           </p>
         </div>
+
+        <CoupangDynamicBannerPreview />
 
         <div className="space-y-10">
           {/* 01 목표 선택 */}

@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from enum import Enum
 
@@ -14,7 +14,7 @@ class DietRequest(BaseModel):
     goal: DietGoal
     days: int = 3
     calories_per_day: Optional[int] = None
-    allergies: Optional[List[str]] = []
+    allergies: Optional[List[str]] = Field(default_factory=list)
 
 
 class Ingredient(BaseModel):
